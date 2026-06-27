@@ -1,26 +1,144 @@
-// Load environment variables from .env
 require("dotenv").config();
-
-// Import packages
 const express = require("express");
-const cors = require("cors");
-
-// Create express app
+const { sequelize, connectDB } = require("./database/db");
+const path = require("path");
 const app = express();
+const port = 3000;
+const bookingRoutes = require("./routes/bookingRoute");
 
-// Middleware
-app.use(cors());
+require("dotenv").config({ path: __dirname + "/.env" });
+console.log("ENV CHECK:", {
+  DB_HOST: process.env.DB_HOST,
+  DB_USER: process.env.DB_USER,
+  DB_PASSWORD: process.env.DB_PASSWORD,
+  DB_NAME: process.env.DB_NAME,
+  DB_PORT: process.env.DB_PORT,
+});
+
+process.on('uncaughtException', (err) => {
+  console.error('Uncaught Exception:', err);
+});
+
+const cors = require("cors");
+app.use(
+  cors({
+    origin: ["http://localhost:5173", "http://localhost:5174"],
+    credentials: true,
+  }),
+);
+
 app.use(express.json());
 
-// Test route
+// Serve static uploads folder
+app.use("/uploads", express.static(path.join(__dirname, "uploads")));
+
+// ============== MODEL ASSOCIATIONS ==============
+// Import models
+const Restaurant = require("./models/venueModel");
+const Cuisine = require("./models/cuisineModel");
+const RestaurantCuisine = require("./models/restaurantCuisineModel");
+const Dish = require("./models/dishModel");
+const Review = require("./models/reviewModel");
+const User = require("./models/usermodel");
+
+// Define associations
+// Restaurant - Cuisine (Many-to-Many)
+Restaurant.belongsToMany(Cuisine, {
+  through: RestaurantCuisine,
+  foreignKey: "restaurantId",
+  as: "cuisines",
+});
+Cuisine.belongsToMany(Restaurant, {
+  through: RestaurantCuisine,
+  foreignKey: "cuisineId",
+});
+
+// Expose associations on the junction table so that queries like
+// RestaurantCuisine.findAll({ include: [Cuisine] }) work without errors.
+RestaurantCuisine.belongsTo(Cuisine, {
+  foreignKey: "cuisineId",
+  as: "Cuisine",
+});
+RestaurantCuisine.belongsTo(Restaurant, {
+  foreignKey: "restaurantId",
+  as: "Restaurant",
+});
+Cuisine.hasMany(RestaurantCuisine, { foreignKey: "cuisineId" });
+Restaurant.hasMany(RestaurantCuisine, { foreignKey: "restaurantId" });
+
+// Restaurant - Dish (One-to-Many)
+Restaurant.hasMany(Dish, { foreignKey: "restaurantId", as: "dishes" });
+Dish.belongsTo(Restaurant, { foreignKey: "restaurantId" });
+
+// Review - User (Many-to-One)
+Review.belongsTo(User, { foreignKey: "userId", as: "user" });
+User.hasMany(Review, { foreignKey: "userId", as: "reviews" });
+
+// Review - Restaurant (Many-to-One)
+Review.belongsTo(Restaurant, { foreignKey: "restaurantId", as: "restaurant" });
+Restaurant.hasMany(Review, { foreignKey: "restaurantId", as: "reviews" });
+// =================================================
+
+app.use("/api/user/", require("./routes/route"));
+app.use("/api", require("./routes/venueRoute"));
+app.use("/api", bookingRoutes);
+// Admin settings routes
+app.use("/api/admin", require("./routes/settingsRoute"));
+
+// Cuisine routes
+app.use("/api/cuisine", require("./routes/cuisineRoute"));
+
+// Dish routes
+app.use("/api/dishes", require("./routes/dishRoute"));
+
+// Restaurant-Cuisine association routes
+const restaurantCuisineRoutes = require("./routes/restaurantCuisineRoute");
+app.use("/api/restaurant", restaurantCuisineRoutes);
+
+// Review routes
+app.use("/api/reviews", require("./routes/reviewRoute"));
+
 app.get("/", (req, res) => {
-  res.send("Padhai Sathi Backend Running");
+  res.json({
+    message: "Welcome to the TurfTime API",
+  });
 });
 
-// Port
-const PORT = process.env.PORT || 3000;
+const startServer = async () => {
+  await connectDB();
+  await sequelize.sync({ alter: true });
 
-// Start server
-app.listen(PORT, () => {
-  console.log(`Server running on http://localhost:${PORT}`);
-});
+  // Development convenience: auto-create an admin if none exists
+  if (process.env.NODE_ENV !== "production") {
+    try {
+      const bcrypt = require("bcrypt");
+      const adminEmail = process.env.ADMIN_EMAIL || "admin@local.test";
+      const adminPassword = process.env.ADMIN_PASSWORD || "Admin123!";
+      const adminName = process.env.ADMIN_NAME || "Administrator";
+
+      const existingAdmin = await User.findOne({ where: { role: "admin" } });
+      if (!existingAdmin) {
+        const hashed = await bcrypt.hash(adminPassword, 10);
+        await User.create({
+          username: adminName,
+          email: adminEmail,
+          password: hashed,
+          role: "admin",
+        });
+        console.log(
+          `Created admin user: ${adminEmail} (password: ${adminPassword})`,
+        );
+      } else {
+        console.log(`Admin user exists: ${existingAdmin.email}`);
+      }
+    } catch (err) {
+      console.warn("Admin seeding failed:", err.message || err);
+    }
+  }
+
+  app.listen(port, () => {
+    console.log(`Server is running on port ${port}`);
+  });
+};
+
+startServer();
