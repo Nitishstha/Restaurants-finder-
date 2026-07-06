@@ -96,11 +96,19 @@ exports.updateBookingStatus = async (req, res) => {
     // Fetch updated booking
     const updatedBooking = await Booking.findByPk(id);
 
+    // Create notification for user
+    const Notification = require("../models/notificationModel");
+    await Notification.create({
+      userId: booking.userId,
+      message: `Your booking at ${booking.restaurantName} on ${booking.date} has been ${status}.`,
+      type: "booking",
+    });
+
     // Track whether email was sent and related info
     let emailSent = false;
     let emailAttempts = 0;
     let emailError = null;
-
+    
     // If booking is confirmed, notify the booking owner (customer) by email
     if (status === "Confirmed") {
       try {

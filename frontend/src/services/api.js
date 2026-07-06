@@ -46,6 +46,9 @@ export const verifyOtp = (email, otp) =>
     email,
     otp,
   });
+  
+  export const getNotifications = () => API.get("/notifications").catch(() => {});
+export const markNotificationsRead = () => API.put("/notifications/read-all").catch(() => {});
 
 export const resetPassword = (email, otp, newPassword) =>
   API.post("/user/resetpassword", {

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import {
   Search,
   Bell,
@@ -11,7 +11,7 @@ import {
   Activity,
 } from "lucide-react";
 import Nav from "../components/Nav";
-import { getDashboardStats, getUserBookings } from "../../services/api";
+import { getDashboardStats, getUserBookings, getNotifications, markNotificationsRead } from "../../services/api";
 
 const UserDashboard = ({
   user = { username: "Guest", role: "Foodie" },
@@ -23,6 +23,9 @@ const UserDashboard = ({
   const [upcomingBookings, setUpcomingBookings] = useState([]);
   const [loadingStats, setLoadingStats] = useState(true);
   const [loadingBookings, setLoadingBookings] = useState(true);
+  const [notifications, setNotifications] = useState([]);
+  const [showNotifications, setShowNotifications] = useState(false);
+  const [unreadCount, setUnreadCount] = useState(0);
 
   const displayUser = {
     username: user?.username || "Guest",
@@ -34,7 +37,6 @@ const UserDashboard = ({
     setCurrentPage(tab.toLowerCase());
   };
 
-  // --- FETCHING LOGIC ---
   useEffect(() => {
     const fetchStats = async () => {
       try {
@@ -82,7 +84,27 @@ const UserDashboard = ({
     };
     fetchBookings();
   }, []);
-  // --- END OF LOGIC ---
+
+  useEffect(() => {
+    const fetchNotifications = async () => {
+      const res = await getNotifications();
+      if (res?.data?.success) {
+        setNotifications(res.data.notifications);
+        setUnreadCount(res.data.notifications.filter(n => !n.isRead).length);
+      }
+    };
+    fetchNotifications();
+    const interval = setInterval(fetchNotifications, 30000);
+    return () => clearInterval(interval);
+  }, []);
+
+  const handleBellClick = async () => {
+    setShowNotifications(!showNotifications);
+    if (!showNotifications && unreadCount > 0) {
+      await markNotificationsRead();
+      setUnreadCount(0);
+    }
+  };
 
   return (
     <div className="flex min-h-screen bg-[#F9FAFB]">
@@ -93,7 +115,6 @@ const UserDashboard = ({
       />
 
       <main className="flex-1 flex flex-col md:ml-64">
-        {/* Modern White Header */}
         <header className="fixed top-0 right-0 left-0 h-20 bg-white/80 backdrop-blur-md border-b border-gray-100 flex items-center justify-between px-8 md:left-64 z-40">
           <div>
             <h2 className="text-xl font-black text-gray-800 tracking-tight uppercase italic">
@@ -111,10 +132,37 @@ const UserDashboard = ({
               />
             </div>
 
-            <button className="p-2 text-gray-400 hover:bg-gray-50 rounded-xl transition-colors relative">
-              <Bell size={22} />
-              <span className="absolute top-2 right-2 w-2 h-2 bg-fuchsia-500 rounded-full border-2 border-white"></span>
-            </button>
+            {/* Bell Notification */}
+            <div className="relative">
+              <button onClick={handleBellClick} className="relative p-2">
+                <Bell size={22} className="text-gray-400" />
+                {unreadCount > 0 && (
+                  <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center font-bold">
+                    {unreadCount}
+                  </span>
+                )}
+              </button>
+
+              {showNotifications && (
+                <div className="absolute right-0 top-12 w-80 bg-white rounded-2xl shadow-2xl border z-50 overflow-hidden">
+                  <div className="p-4 border-b font-bold text-slate-800">Notifications</div>
+                  {notifications.length === 0 ? (
+                    <div className="p-6 text-center text-slate-400">No notifications</div>
+                  ) : (
+                    <div className="max-h-80 overflow-y-auto">
+                      {notifications.map((n) => (
+                        <div key={n.id} className={`p-4 border-b text-sm ${!n.isRead ? "bg-purple-50" : ""}`}>
+                          <p className="text-slate-700">{n.message}</p>
+                          <p className="text-xs text-slate-400 mt-1">
+                            {new Date(n.createdAt).toLocaleString()}
+                          </p>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
 
             <div className="flex items-center gap-3 pl-5 border-l border-gray-100">
               <div className="text-right">
@@ -133,37 +181,25 @@ const UserDashboard = ({
         </header>
 
         <div className="flex-1 p-8 pt-28 space-y-8">
-          {/* Stats Grid */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
             {loadingStats
               ? [1, 2, 3, 4].map((i) => (
-                  <div
-                    key={i}
-                    className="h-28 bg-white animate-pulse rounded-3xl border border-gray-100"
-                  />
+                  <div key={i} className="h-28 bg-white animate-pulse rounded-3xl border border-gray-100" />
                 ))
               : stats.map((stat, idx) => (
-                  <div
-                    key={idx}
-                    className="bg-white p-6 rounded-[2rem] border border-gray-100 shadow-sm flex items-center gap-5 hover:shadow-md transition-shadow"
-                  >
+                  <div key={idx} className="bg-white p-6 rounded-[2rem] border border-gray-100 shadow-sm flex items-center gap-5 hover:shadow-md transition-shadow">
                     <div className={`${stat.bg} ${stat.color} p-4 rounded-2xl`}>
                       <stat.icon size={24} />
                     </div>
                     <div>
-                      <p className="text-xs font-bold text-gray-400 uppercase tracking-tighter">
-                        {stat.label}
-                      </p>
-                      <p className="text-2xl font-black text-gray-900">
-                        {stat.value}
-                      </p>
+                      <p className="text-xs font-bold text-gray-400 uppercase tracking-tighter">{stat.label}</p>
+                      <p className="text-2xl font-black text-gray-900">{stat.value}</p>
                     </div>
                   </div>
                 ))}
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-            {/* Bookings Table */}
             <div className="lg:col-span-2 bg-white rounded-[2.5rem] border border-gray-100 shadow-sm overflow-hidden">
               <div className="p-8 border-b border-gray-50 flex justify-between items-center">
                 <h3 className="text-lg font-black text-gray-900 uppercase italic tracking-tight">
@@ -190,19 +226,13 @@ const UserDashboard = ({
                   <tbody className="divide-y divide-gray-50">
                     {loadingBookings ? (
                       <tr>
-                        <td
-                          colSpan="4"
-                          className="p-20 text-center text-gray-400 font-bold italic"
-                        >
+                        <td colSpan="4" className="p-20 text-center text-gray-400 font-bold italic">
                           Syncing with database...
                         </td>
                       </tr>
                     ) : upcomingBookings.length > 0 ? (
                       upcomingBookings.map((booking) => (
-                        <tr
-                          key={booking.id}
-                          className="group hover:bg-purple-50/30 transition-colors"
-                        >
+                        <tr key={booking.id} className="group hover:bg-purple-50/30 transition-colors">
                           <td className="px-8 py-6">
                             <div className="font-bold text-gray-900 group-hover:text-purple-600 transition-colors">
                               {booking.restaurantName || booking.venueName}
@@ -212,21 +242,15 @@ const UserDashboard = ({
                             </div>
                           </td>
                           <td className="px-8 py-6">
-                            <div className="text-sm font-bold text-gray-800">
-                              {booking.date}
-                            </div>
-                            <div className="text-xs text-gray-500">
-                              {booking.time}
-                            </div>
+                            <div className="text-sm font-bold text-gray-800">{booking.date}</div>
+                            <div className="text-xs text-gray-500">{booking.time}</div>
                           </td>
                           <td className="px-8 py-6">
-                            <span
-                              className={`px-3 py-1 rounded-lg text-[10px] font-black uppercase tracking-widest ${
-                                booking.status === "Confirmed"
-                                  ? "bg-emerald-100 text-emerald-700"
-                                  : "bg-amber-100 text-amber-700"
-                              }`}
-                            >
+                            <span className={`px-3 py-1 rounded-lg text-[10px] font-black uppercase tracking-widest ${
+                              booking.status === "Confirmed"
+                                ? "bg-emerald-100 text-emerald-700"
+                                : "bg-amber-100 text-amber-700"
+                            }`}>
                               {booking.status}
                             </span>
                           </td>
@@ -237,10 +261,7 @@ const UserDashboard = ({
                       ))
                     ) : (
                       <tr>
-                        <td
-                          colSpan="4"
-                          className="p-20 text-center text-gray-400 font-bold italic"
-                        >
+                        <td colSpan="4" className="p-20 text-center text-gray-400 font-bold italic">
                           No reservations found in database.
                         </td>
                       </tr>
@@ -250,38 +271,24 @@ const UserDashboard = ({
               </div>
             </div>
 
-            {/* Sidebar Cards */}
             <div className="space-y-6">
-              {/* New Feature: Dining Tips */}
               <div className="bg-white p-8 rounded-[2.5rem] border border-gray-100 shadow-sm relative overflow-hidden group">
                 <div className="flex justify-between items-start mb-4">
-                  <Utensils
-                    className="text-purple-500 animate-pulse"
-                    size={24}
-                  />
-                  <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">
-                    Dining Tips
-                  </span>
+                  <Utensils className="text-purple-500 animate-pulse" size={24} />
+                  <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Dining Tips</span>
                 </div>
                 <div className="flex items-baseline gap-2">
-                  <span className="text-4xl font-black text-gray-900 tracking-tighter">
-                    🍽️
-                  </span>
-                  <span className="text-sm font-bold text-purple-500 uppercase">
-                    Bon Appétit
-                  </span>
+                  <span className="text-4xl font-black text-gray-900 tracking-tighter">🍽️</span>
+                  <span className="text-sm font-bold text-purple-500 uppercase">Bon Appétit</span>
                 </div>
                 <p className="text-xs text-gray-500 mt-2 font-medium">
                   Discover amazing dining experiences at top restaurants near you!
                 </p>
               </div>
 
-              {/* Action Card */}
               <div className="bg-gradient-to-br from-purple-500 to-fuchsia-500 p-8 rounded-[2.5rem] text-white shadow-xl shadow-purple-100 relative overflow-hidden group">
                 <div className="relative z-10">
-                  <h3 className="text-2xl font-black mb-2 italic uppercase tracking-tighter">
-                    Ready to Dine?
-                  </h3>
+                  <h3 className="text-2xl font-black mb-2 italic uppercase tracking-tighter">Ready to Dine?</h3>
                   <p className="text-purple-100 text-xs font-medium mb-8 leading-relaxed">
                     Find and reserve tables at the best restaurants in your area.
                   </p>
@@ -289,7 +296,7 @@ const UserDashboard = ({
                     onClick={() => handleTabChange("Restaurants")}
                     className="w-full bg-white text-purple-600 py-4 rounded-2xl font-black uppercase text-xs tracking-widest shadow-lg hover:bg-purple-50 transition-all active:scale-95"
                   >
-                    <Plus size={18} className="inline mr-2" strokeWidth={3} />{" "}
+                    <Plus size={18} className="inline mr-2" strokeWidth={3} />
                     New Reservation
                   </button>
                 </div>

@@ -27,6 +27,7 @@ app.use(
   }),
 );
 
+app.use("/api/notifications", require("./routes/notificationRoute"));
 app.use(express.json());
 
 // Serve static uploads folder
