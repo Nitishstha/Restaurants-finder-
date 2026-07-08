@@ -19,7 +19,6 @@ const ReviewList = ({ reviews, loading }) => {
       </div>
     );
   }
-
   const formatDate = (dateString) => {
     const date = new Date(dateString);
     return date.toLocaleDateString("en-US", {
