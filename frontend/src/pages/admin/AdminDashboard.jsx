@@ -119,7 +119,6 @@ const AdminDashboard = ({ onLogout }) => {
             },
           ]);
 
-          // Create users map for quick lookup
           const userMap = {};
           usersRes.data.users?.forEach((user) => {
             userMap[user.id] = user;
