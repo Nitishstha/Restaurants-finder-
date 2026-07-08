@@ -21,7 +21,6 @@ const LocationPicker = ({
   const [position, setPosition] = useState(null);
   const [address, setAddress] = useState("");
 
-  // Default to Kathmandu, Nepal if no coordinates provided
   const defaultLat = 27.7172;
   const defaultLng = 85.324;
 
@@ -39,7 +38,6 @@ const LocationPicker = ({
         const { lat, lng } = e.latlng;
         setPosition([lat, lng]);
         onLocationChange(lat, lng);
-        // Reverse geocode (simple version - just store coordinates)
         setAddress(`${lat.toFixed(6)}, ${lng.toFixed(6)}`);
       },
     });
