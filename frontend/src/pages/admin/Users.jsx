@@ -22,7 +22,6 @@ const Users = () => {
     }
   };
 
-  // Filter users based on search
   const filteredUsers = users.filter(
     (u) =>
       u.username.toLowerCase().includes(searchTerm.toLowerCase()) ||
