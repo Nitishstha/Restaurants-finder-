@@ -185,7 +185,6 @@ const VenueManagement = () => {
       data.append("latitude", formData.latitude);
       data.append("longitude", formData.longitude);
 
-      // Append cuisine IDs for multi-cuisine support
       if (formData.cuisineIds && formData.cuisineIds.length > 0) {
         formData.cuisineIds.forEach((id) => {
           data.append("cuisineIds", id);
