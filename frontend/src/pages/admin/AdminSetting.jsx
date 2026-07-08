@@ -44,7 +44,6 @@ const AdminSetting = () => {
           }));
         }
 
-        // Fetch platform settings
         const settingsRes = await getSettings();
         if (settingsRes.data.success) {
           const s = settingsRes.data.settings;
